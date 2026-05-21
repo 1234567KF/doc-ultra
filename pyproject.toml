@@ -1,7 +1,7 @@
 [project]
-name = "doc-ultra"
+name = "doc-ultra-cli"
 version = "0.1.0"
-description = "文档超融合处理工具 - 多视角并行优化 + 串行拷问检查流水线"
+description = "文档超融合处理工具 CLI - 多视角并行优化 + 串行拷问检查流水线"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.0",
@@ -19,4 +19,5 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
+where = [".qoder/skills/doc-ultra/reference"]
 include = ["doc_ultra*"]
