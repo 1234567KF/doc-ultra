@@ -1,0 +1,295 @@
+# ============================================================
+# doc-ultra v2 配置文件 — 多Provider注册 + 文档类型预设
+# ============================================================
+#
+# 架构说明:
+#   1. providers 节: 注册多个模型提供商，标注能力标签
+#   2. presets  节: 为不同文档类型预设各阶段的Provider分配
+#   3. models   节: 默认/通用场景的阶段分配（向后兼容）
+#
+# 支持文档类型: 标书、专利、软著、团标、项目申报、知识库文档、通用
+
+# ════════════════════════════════════════════════════════════
+# 一、Provider 注册表
+# ════════════════════════════════════════════════════════════
+# 每个 Provider 包含:
+#   type:   适配器类型 (openai / anthropic / deepseek)
+#   model:  模型名称
+#   api_key: API Key (留空则从环境变量 {NAME}_API_KEY 读取)
+#   base_url: 自定义API地址 (可选)
+#   capabilities: 能力标签列表
+#
+# 能力标签说明:
+#   high_quality  - 输出质量最高
+#   economical    - 性价比最优
+#   fast          - 响应最快
+#   long_context  - 支持超长上下文
+#   creative      - 创意/改写能力强
+#   reasoning     - 推理/分析能力强
+#   precise       - 精确执行指令
+#   structured    - 结构化输出能力
+
+providers:
+  pro:
+    type: openai
+    model: gpt-4o
+    api_key: ""
+    capabilities: [high_quality, reasoning, structured, creative]
+
+  flash:
+    type: openai
+    model: gpt-4o-mini
+    api_key: ""
+    capabilities: [economical, fast, precise]
+
+  claude:
+    type: anthropic
+    model: claude-sonnet-4-20250514
+    api_key: ""
+    capabilities: [high_quality, creative, long_context, reasoning]
+
+  deepseek:
+    type: deepseek
+    model: deepseek-chat
+    api_key: ""
+    base_url: "https://api.deepseek.com"
+    capabilities: [economical, long_context, structured]
+
+  kimi:
+    type: openai
+    model: moonshot-v1-8k
+    api_key: ""
+    base_url: "https://api.moonshot.cn/v1"
+    capabilities: [economical, long_context]
+
+  minimax:
+    type: openai
+    model: abab6.5s-chat
+    api_key: ""
+    base_url: "https://api.minimax.chat/v1"
+    capabilities: [economical, creative, fast]
+
+  qwen:
+    type: openai
+    model: qwen-max
+    api_key: ""
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    capabilities: [economical, long_context, structured]
+
+# ════════════════════════════════════════════════════════════
+# 二、文档类型预设 (Presets)
+# ════════════════════════════════════════════════════════════
+# 每个预设定义了该文档类型下各阶段使用的 Provider。
+# Provider 引用上面注册的名称或直接写 provider/model。
+#
+# 分配原则:
+#   - 质量敏感阶段(解析/融合/检查) → high_quality Provider
+#   - 数量敏感阶段(优化/扩写)     → economical Provider (多视角并行成本可控)
+#   - 终审抛光                     → economical + fast Provider
+
+presets:
+  # ── 标书 ──
+  bid:
+    description: "招投标文档 — 要求格式严格、逻辑严密、术语专业"
+    stages:
+      parser: pro              # 需求解析需要精确理解
+      optimizers:               # 多视角并行: 高质量1个 + 性价比2个
+        - id: radical
+          provider: claude      # 激进视角用Claude(创意+长文)
+        - id: conservative
+          provider: pro         # 保守视角用pro(精度)
+        - id: balanced
+          provider: deepseek    # 均衡视角用deepseek(性价比长文)
+      fuser: claude             # 融合用Claude(长文+推理)
+      checker: pro              # 检查用pro(精度最高)
+      expander: deepseek        # 扩写用deepseek(性价比)
+      polisher: flash           # 抛光用flash(快且便宜)
+
+  # ── 专利 ──
+  patent:
+    description: "专利文档 — 权利要求严谨、技术描述精确、法律语言规范"
+    stages:
+      parser: pro
+      optimizers:
+        - id: radical
+          provider: claude
+        - id: conservative
+          provider: pro
+        - id: balanced
+          provider: qwen
+      fuser: claude
+      checker: pro
+      expander: deepseek
+      polisher: flash
+
+  # ── 软著 ──
+  software_copyright:
+    description: "软件著作权 — 技术说明+用户手册+源代码说明"
+    stages:
+      parser: pro
+      optimizers:
+        - id: radical
+          provider: claude
+        - id: conservative
+          provider: flash       # 保守可用便宜模型
+        - id: balanced
+          provider: deepseek
+      fuser: claude
+      checker: pro
+      expander: kimi
+      polisher: flash
+
+  # ── 团标/行标 ──
+  standard:
+    description: "团体标准/行业标准 — 格式规范、术语统一、条款清晰"
+    stages:
+      parser: pro
+      optimizers:
+        - id: radical
+          provider: claude
+        - id: conservative
+          provider: pro
+        - id: balanced
+          provider: qwen
+      fuser: claude
+      checker: pro
+      expander: deepseek
+      polisher: flash
+
+  # ── 项目申报 ──
+  project_application:
+    description: "项目申报书 — 突出创新点、量化指标、预算论证"
+    stages:
+      parser: pro
+      optimizers:
+        - id: radical
+          provider: claude      # 激进用Claude(创意突出亮点)
+        - id: conservative
+          provider: pro
+        - id: balanced
+          provider: minimax     # minimax创意也不错
+      fuser: claude
+      checker: pro
+      expander: kimi
+      polisher: flash
+
+  # ── 知识库文档 ──
+  knowledge_base:
+    description: "基于知识库的文档 — 信息整合、引用准确、结构化"
+    stages:
+      parser: deepseek          # 长文解析用deepseek(128k上下文)
+      optimizers:
+        - id: radical
+          provider: claude
+        - id: conservative
+          provider: qwen        # qwen长文+结构化不错
+        - id: balanced
+          provider: deepseek
+      fuser: claude
+      checker: pro
+      expander: kimi
+      polisher: flash
+
+  # ── 通用文档(默认) ──
+  general:
+    description: "通用文档 — 适用于未指定类型的文档处理"
+    stages:
+      parser: pro
+      optimizers:
+        - id: radical
+          provider: claude
+        - id: conservative
+          provider: pro
+        - id: balanced
+          provider: deepseek
+      fuser: claude
+      checker: pro
+      expander: deepseek
+      polisher: flash
+
+  # ── 极致省钱模式 ──
+  economical:
+    description: "低成本模式 — 全部使用性价比Provider，适合大批量处理"
+    stages:
+      parser: deepseek
+      optimizers:
+        - id: radical
+          provider: kimi
+        - id: conservative
+          provider: flash
+        - id: balanced
+          provider: deepseek
+      fuser: deepseek
+      checker: pro             # 检查仍用pro(质量底线)
+      expander: kimi
+      polisher: flash
+
+# ════════════════════════════════════════════════════════════
+# 三、默认模型配置 (向后兼容，无preset时使用)
+# ════════════════════════════════════════════════════════════
+models:
+  parser:
+    provider: openai
+    model: gpt-4o
+    temperature: 0.3
+
+  optimizers:
+    - id: radical
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+      temperature: 0.8
+    - id: conservative
+      provider: openai
+      model: gpt-4o
+      temperature: 0.2
+    - id: balanced
+      provider: deepseek
+      model: deepseek-chat
+      temperature: 0.5
+
+  fuser:
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    temperature: 0.4
+
+  checker:
+    provider: openai
+    model: gpt-4o
+    temperature: 0.1
+
+  expander:
+    provider: deepseek
+    model: deepseek-chat
+    temperature: 0.5
+
+  polisher:
+    provider: openai
+    model: gpt-4o-mini
+    temperature: 0.2
+
+# ════════════════════════════════════════════════════════════
+# 四、流水线参数
+# ════════════════════════════════════════════════════════════
+pipeline:
+  max_grill_rounds: 3
+  grill_timeout_minutes: 15
+
+# ════════════════════════════════════════════════════════════
+# 五、附件与输出
+# ════════════════════════════════════════════════════════════
+attachments:
+  max_files: 20
+  max_total_size_mb: 50
+
+output:
+  clean_ai_traces: true
+  remove_metadata: true
+
+# ════════════════════════════════════════════════════════════
+# 六、API Keys (向后兼容，推荐在 providers 节中配置)
+# ════════════════════════════════════════════════════════════
+# 环境变量: OPENAI_API_KEY, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY
+api_keys:
+  openai: ""
+  anthropic: ""
+  deepseek: ""

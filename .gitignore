@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# doc-ultra 中间产物
+.doc-ultra/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtualenv
+venv/
+.venv/
+
+# Environment
+.env
+.env.local
