@@ -361,10 +361,8 @@ def main(
             mode="file",
         )
         server.start()
-        try:
-            server.wait()
-        except KeyboardInterrupt:
-            console.print("\n[dim]预览服务已停止[/dim]")
+        server.wait()
+        console.print("\n[dim]预览服务已停止[/dim]")
         return
 
     # ── 加载配置 (需要流水线处理) ──
@@ -430,10 +428,8 @@ def main(
         server.start()
         console.print("[green]预览服务已启动，按 Ctrl+C 停止[/green]")
         console.print()
-        try:
-            server.wait()
-        except KeyboardInterrupt:
-            console.print("\n[dim]预览服务已停止[/dim]")
+        server.wait()
+        console.print("\n[dim]预览服务已停止[/dim]")
         return
 
     # ── 执行流水线 ──
@@ -488,10 +484,8 @@ def main(
         server.start()
         console.print("[green]预览服务已启动，按 Ctrl+C 停止[/green]")
         console.print()
-        try:
-            server.wait()
-        except KeyboardInterrupt:
-            console.print("\n[dim]预览服务已停止[/dim]")
+        server.wait()
+        console.print("\n[dim]预览服务已停止[/dim]")
     
     if verbose:
         log_path = Path(".doc-ultra") / "pipeline-execution.log"

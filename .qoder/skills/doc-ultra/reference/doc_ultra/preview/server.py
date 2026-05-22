@@ -13,6 +13,13 @@ import threading
 import time
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
+try:
+    from http.server import ThreadingHTTPServer
+except ImportError:
+    # Python < 3.7 fallback
+    import socketserver
+    class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+        daemon_threads = True
 from pathlib import Path
 from typing import Optional
 
@@ -89,22 +96,28 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
     def _send_json(self, data: dict, status: int = 200) -> None:
         """发送 JSON 响应。"""
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-        self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
 
     def _send_text(self, text: str, content_type: str = "text/html; charset=utf-8",
                    status: int = 200) -> None:
         """发送文本响应。"""
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-        self.wfile.write(text.encode("utf-8"))
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(text.encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
 
     def _send_error(self, status: int, message: str) -> None:
         """发送错误响应。"""
@@ -265,33 +278,36 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
     def _handle_sse(self) -> None:
         """处理 SSE 连接。"""
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-
-        buffer = io.StringIO()
-        _sse_manager.register(buffer)
-
         try:
-            # 发送初始连接事件
-            self.wfile.write(b"event: connected\ndata: {}\n\n")
-            self.wfile.flush()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
 
-            while True:
-                time.sleep(0.5)
-                data = buffer.getvalue()
-                if data:
-                    self.wfile.write(data.encode("utf-8"))
-                    self.wfile.flush()
-                    buffer.truncate(0)
-                    buffer.seek(0)
+            buffer = io.StringIO()
+            _sse_manager.register(buffer)
+
+            try:
+                # 发送初始连接事件
+                self.wfile.write(b"event: connected\ndata: {}\n\n")
+                self.wfile.flush()
+
+                while True:
+                    time.sleep(0.5)
+                    data = buffer.getvalue()
+                    if data:
+                        self.wfile.write(data.encode("utf-8"))
+                        self.wfile.flush()
+                        buffer.truncate(0)
+                        buffer.seek(0)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                _sse_manager.unregister(buffer)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
-        finally:
-            _sse_manager.unregister(buffer)
 
     def _render_index_page(self, sm: SnapshotManager) -> str:
         """渲染主页面（单页应用）。"""
@@ -504,46 +520,51 @@ body {{
 .stat-box .stat-value.changed {{ color: #eab308; }}
 
 .preview-container {{
-    padding: 1.5rem;
-    max-width: 1400px;
-    margin: 0 auto;
+    padding: 1rem 1.5rem;
+    width: 100%;
+    height: calc(100vh - 180px);
 }}
 .preview-container.side-by-side {{
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
+    gap: 1rem;
+    height: calc(100vh - 180px);
 }}
 .preview-frame {{
     background: #fff;
-    border-radius: 10px;
+    border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }}
 .preview-frame .frame-header {{
-    padding: 0.6rem 1rem;
+    padding: 0.5rem 1rem;
     background: #f8f9fc;
     border-bottom: 1px solid #e2e8f0;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: #666;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-shrink: 0;
 }}
 @media (prefers-color-scheme: dark) {{
     .preview-frame .frame-header {{ background: #1e1e24; border-color: #2e2e38; color: #888; }}
 }}
 .preview-frame .frame-content {{
-    padding: 1rem;
-    min-height: 360px;
-    max-height: 80vh;
+    padding: 0.5rem 1rem;
+    flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
 }}
 .preview-frame .frame-content iframe {{
     width: 100%;
     height: 100%;
     border: none;
+    min-height: 400px;
 }}
 
 .loading {{
@@ -869,11 +890,28 @@ function connectSSE() {{
 
         label.textContent = '已更新';
 
-        // 延迟 500ms 后刷新（等待文件写入完成）
-        setTimeout(function() {{
-            refreshPreview();
-            label.textContent = '实时';
-        }}, 500);
+        // 解析事件数据，获取完整版本列表
+        try {{
+            var payload = JSON.parse(e.data);
+            if (payload.versions && payload.versions.length > 0) {{
+                VERSIONS = payload.versions;
+                initTimeline();
+                initSelects();
+                // 自动切换到最新版本对比
+                if (payload.new_version) {{
+                    var prevIdx = VERSIONS.length - 2;
+                    if (prevIdx >= 0) {{
+                        currentFrom = VERSIONS[prevIdx].id;
+                    }}
+                    currentTo = payload.new_version;
+                    updateSelects();
+                    updateTimelineNodes();
+                }}
+            }}
+        }} catch(_) {{}}
+
+        refreshPreview();
+        label.textContent = '实时';
     }});
 
     evtSource.onerror = function() {{
@@ -949,8 +987,8 @@ class PreviewServer:
         global PREVIEW_PORT
         PREVIEW_PORT = self.port
 
-        # 4. 启动 HTTP 服务器
-        self._httpd = HTTPServer(("127.0.0.1", self.port), PreviewHandler)
+        # 4. 启动 HTTP 服务器（多线程，防止 SSE 阻塞其他请求）
+        self._httpd = ThreadingHTTPServer(("127.0.0.1", self.port), PreviewHandler)
         self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
         self._thread.start()
 
@@ -967,22 +1005,28 @@ class PreviewServer:
         if self.mode == "file" and self.original_file:
             # 单文件模式：仅监听目标文件所在目录
             watch_dir = self.original_file.parent
+            _target_resolved = self.original_file.resolve()
             def on_file_change(event: FileChangeEvent) -> None:
                 file_path = event.file_path
-                # 只关注目标文件的变更
-                if not file_path.samefile(self.original_file):
+                # 使用路径比较（而非 inode/samefile），
+                # 因为编辑器原子保存（rename over）会改变 inode
+                if file_path.resolve() != _target_resolved:
                     return
                 # 短暂延迟，等待文件写入完成
                 import time as _time
-                _time.sleep(0.3)
+                _time.sleep(0.5)
                 changed = self.snapshots.record_file_snapshot(file_path)
                 if changed:
+                    # 重新读取版本列表，广播完整快照信息
+                    versions_data = [v.to_dict() for v in self.snapshots.get_all_versions()]
+                    new_version = f"V{len(self.snapshots._file_history) - 1}"
                     _sse_manager.broadcast(
                         "file_changed",
                         json.dumps({
                             "file": str(file_path),
                             "event": event.event_type,
-                            "new_version": f"V{len(self.snapshots._file_history) - 1}",
+                            "new_version": new_version,
+                            "versions": versions_data,
                         }, ensure_ascii=False),
                     )
         else:
@@ -1003,13 +1047,21 @@ class PreviewServer:
         self.watcher.start()
 
     def stop(self) -> None:
-        """停止服务器。"""
+        """停止服务器（释放端口、停止文件监听）。"""
         if self.watcher:
             self.watcher.stop()
         if self._httpd:
             self._httpd.shutdown()
+            self._httpd.server_close()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3)
 
     def wait(self) -> None:
-        """等待服务器停止。"""
+        """等待服务器停止。按 Ctrl+C 可安全退出。"""
         if self._thread:
-            self._thread.join()
+            try:
+                # 使用 while 轮询代替 join，确保 KeyboardInterrupt 能及时响应
+                while self._thread.is_alive():
+                    self._thread.join(timeout=0.5)
+            except KeyboardInterrupt:
+                self.stop()
