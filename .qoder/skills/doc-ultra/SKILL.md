@@ -30,6 +30,23 @@ metadata:
   the appropriate tool instead.
 - Memory: after each pipeline run, append a structured log entry to
   `.doc-ultra/memory/pipeline-log.md` (see "Memory" section at bottom).
+- **交叉引用同步**：任何章节编号修改后，MUST 立即全文搜索所有交叉引用
+  （中文编号 `第[一二三…]+[章条款]`、数字引用 `见X.Y`、隐性引用 `按.*算法`）
+  并同步更新，包括附录、示例、注释中的引用。
+- **四级标题嵌套检查**：四级标题编号 MUST 与父级标题前缀一致
+  （如父级 `### 4.2`，子级 MUST 为 `#### 4.2.x`，不得出现 `#### 15.1`）。
+- **文档类型前置判定**：Stage0 MUST 先识别文档类型（标准/报告/标书/专利等），
+  据此确定编号体系规范（标准→GB/T 1.1 阿拉伯数字，报告→可保留中文编号）。
+- **去品牌化**：处理标准/规范类文档时，MUST 扫描并中立化企业专属术语
+  （如"发码中心"→"编码管理中心"），编制依据只列国标/行标/军标/ISO。
+- **标准引用核查**：所有引用的标准编号 MUST 逐条通过搜索引擎验证真实存在。
+  宁删勿假——无法确认的标准引用一律删除。
+- **映射 vs 统一**：描述与外部标准衔接时，MUST 使用映射语言
+  （"提取…映射为…"），禁止使用"格式统一为"。
+- **DOCX 文档保护**：若最终输出经 DOCX 转换，Stage5 MUST 确认
+  documentProtection 已从输出文件中移除（Pandoc `--reference-doc` 会继承模板保护标记）。
+- **跨文档一致性**：当处理多文档项目时，任何底层结构变更（编码规则、关键术语、
+  数据结构）后 MUST grep 其他受影响文档检查引用断裂。
 
 ---
 
@@ -42,7 +59,7 @@ metadata:
 | G2 | Stage2→Stage3 | Fused draft file exists and is non-empty |
 | G3 | Stage3→Stage4/5 | Check report verdict is PASS |
 | G4 | Stage4→Stage5 | Expanded draft exists (skip if no expansion requested) |
-| G5 | Stage5→Done | Output file written and final scan passed |
+| G5 | Stage5→Done | Output file written, cross-reference scan and final scan passed |
 
 **If any gate fails, DO NOT continue until the problem is resolved.**
 
@@ -121,6 +138,12 @@ Any round: PASS → break and proceed
 ```
 
 Check protocol and grading (A/B/C/X) defined in [reference.md §Stage3](reference.md).
+
+**技术文档专项检查**（在四维检查之外追加）：
+- **编号交叉引用**：所有引用章节号有效且与正文一致，四级标题编号与父级匹配
+- **数据结构自洽**：字段位数/位序/校验码全局一致，末位 ≤ 字段总位数
+- **术语与标准引用**：无品牌化术语，标准编号全部可查证，映射关系措辞准确
+
 Use **pro** model — quality floor cannot be lowered.
 
 Verify Gate G3 (verdict is PASS or [未决] with user notification).
@@ -144,8 +167,15 @@ Execute four steps per [reference.md §Stage5](reference.md):
 3. Format unification
 4. Final scan
 
-Use **flash** model. After writing output, verify Gate G5 (no [TODO], [待补充],
-orphaned headings, or obvious grammar errors remain in the output).
+Use **flash** model. After writing output, verify Gate G5 (cross-reference scan +
+no [TODO]/[待补充] orphaned headings, or obvious grammar errors remain in the output).
+
+**Stage5 强制检查清单**（逐项确认后方可交付）：
+1. 交叉引用扫描：`grep` 所有编号引用，确认指向有效章节
+2. 编号格式合规：标准文档无"第X章"残余，四级标题嵌套正确
+3. DOCX 保护移除（如适用）：documentProtection 已清除
+4. 无 [TODO]、[待补充]、[...] 占位符
+5. 无孤立标题、无 AI 生成声明、无模板化开场白
 
 ---
 
