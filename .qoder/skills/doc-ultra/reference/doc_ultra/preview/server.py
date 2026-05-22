@@ -9,6 +9,7 @@
 import io
 import json
 import os
+import socket
 import threading
 import time
 import webbrowser
@@ -334,8 +335,13 @@ body {{
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
     background: #f0f2f5;
     color: #1a1a2e;
+    margin: 0;
+    padding: 0;
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }}
+html {{ margin: 0; padding: 0; }}
 @media (prefers-color-scheme: dark) {{
     body {{ background: #121216; color: #e2e2e8; }}
     .app-header {{ background: #1a1a20; border-color: #2e2e38; }}
@@ -355,6 +361,7 @@ body {{
 }}
 
 .app-header {{
+    flex-shrink: 0;
     background: #fff;
     border-bottom: 1px solid #e2e8f0;
     padding: 0.75rem 1.5rem;
@@ -380,9 +387,10 @@ body {{
 }}
 
 .timeline {{
+    flex-shrink: 0;
     background: #fff;
     border-bottom: 1px solid #e2e8f0;
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1.5rem;
     overflow-x: auto;
     white-space: nowrap;
 }}
@@ -443,6 +451,7 @@ body {{
 }}
 
 .controls {{
+    flex-shrink: 0;
     background: #fff;
     border-bottom: 1px solid #e2e8f0;
     padding: 0.75rem 1.5rem;
@@ -495,6 +504,7 @@ body {{
 .view-toggle button:hover:not(.active) {{ color: #3b82f6; }}
 
 .stats-bar {{
+    flex-shrink: 0;
     display: flex;
     gap: 1rem;
     padding: 0.5rem 1.5rem;
@@ -520,15 +530,14 @@ body {{
 .stat-box .stat-value.changed {{ color: #eab308; }}
 
 .preview-container {{
+    flex: 1;
+    min-height: 0;
     padding: 1rem 1.5rem;
-    width: 100%;
-    height: calc(100vh - 180px);
 }}
 .preview-container.side-by-side {{
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
-    height: calc(100vh - 180px);
 }}
 .preview-frame {{
     background: #fff;
@@ -537,7 +546,9 @@ body {{
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     display: flex;
     flex-direction: column;
-    height: 100%;
+}}
+.preview-container.side-by-side .preview-frame {{
+    min-height: 0;
 }}
 .preview-frame .frame-header {{
     padding: 0.5rem 1rem;
@@ -555,16 +566,16 @@ body {{
     .preview-frame .frame-header {{ background: #1e1e24; border-color: #2e2e38; color: #888; }}
 }}
 .preview-frame .frame-content {{
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0;
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    overflow-x: hidden;
 }}
 .preview-frame .frame-content iframe {{
     width: 100%;
     height: 100%;
     border: none;
-    min-height: 400px;
+    display: block;
 }}
 
 .loading {{
@@ -967,6 +978,20 @@ class PreviewServer:
 
     def start(self) -> None:
         """启动服务器 + 文件监听。"""
+        # 0. 检查端口是否可用
+        _check_sock = socket.socket()
+        try:
+            _check_sock.bind(("127.0.0.1", self.port))
+            _check_sock.close()
+        except OSError:
+            raise RuntimeError(
+                f"端口 {self.port} 已被占用。"
+                f"请先停止旧服务 (taskkill /F /PID <进程ID>)，"
+                f"或使用 --port 指定其他端口。"
+            )
+        finally:
+            try: _check_sock.close()
+            except Exception: pass
         # 1. 根据模式初始化快照
         if self.mode == "file" and self.original_file:
             self.snapshots.init_file_history(self.original_file)
