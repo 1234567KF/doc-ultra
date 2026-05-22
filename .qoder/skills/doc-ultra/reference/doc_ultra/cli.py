@@ -23,6 +23,7 @@ from .config import (
     list_presets,
 )
 from .pipeline import PipelineRunner
+from .preview import PreviewServer
 
 console = Console()
 
@@ -249,6 +250,27 @@ def _suggest_roles(config: DocUltraConfig) -> dict[str, str]:
     is_flag=True,
     help="仅解析需求，不实际调用模型",
 )
+@click.option(
+    "--serve",
+    is_flag=True,
+    help="流水线执行完后启动 Web 预览服务",
+)
+@click.option(
+    "--serve-only",
+    is_flag=True,
+    help="仅启动预览服务（不执行流水线）。有 .md 文件则预览该文件（单文件模式），否则预览 .doc-ultra/ 中间产物",
+)
+@click.option(
+    "--preview",
+    is_flag=True,
+    help="直接预览指定的 .md 文件（不经过流水线），每次保存自动产生新版本快照",
+)
+@click.option(
+    "--port",
+    default=8765,
+    type=int,
+    help="预览服务端口（默认: 8765）",
+)
 @click.version_option(version="0.2.0", prog_name="doc-ultra")
 def main(
     input_file: str,
@@ -264,6 +286,10 @@ def main(
     max_grill_rounds: Optional[int],
     verbose: bool,
     dry_run: bool,
+    serve: bool,
+    serve_only: bool,
+    preview: bool,
+    port: int,
 ) -> None:
     """doc-ultra v2 — 文档超融合处理工具。
 
@@ -287,6 +313,10 @@ def main(
       doc-ultra 专利初稿.md --auto-preset
       doc-ultra 申报书.md -p project_application -o 申报书终稿.md
       doc-ultra 文档.md --check-only --verbose
+      doc-ultra 会议笔记.md                             # 直接预览（不跑流水线）
+      doc-ultra 会议笔记.md --preview                    # 同上，显式预览
+      doc-ultra --serve-only                             # 预览 .doc-ultra/ 中间产物
+      doc-ultra 报告.md --serve-only                     # 单文件预览包含流水线产物
     """
     print_banner()
 
@@ -302,7 +332,42 @@ def main(
         console.print("[dim]使用 --help 查看用法[/dim]")
         sys.exit(1)
 
-    # ── 加载配置 ──
+    # ── 直接预览模式：给 .md 文件但不跑流水线 ──
+    # 条件：有 input_file + 无任何处理标志（-p/--auto-preset/--check-only/dry-run）
+    #       或者显式指定了 --preview
+    processing_flags = any([preset_name, auto_preset, check_only, serve, dry_run, target_words > 0])
+    direct_preview = preview or (not processing_flags and not serve_only and Path(input_file).suffix == ".md")
+    
+    if direct_preview:
+        file_path = Path(input_file).resolve()
+        console.print()
+        console.print(
+            Panel.fit(
+                f"[bold green]📄 直接预览模式[/bold green]\n"
+                f"文件: [cyan]{file_path.name}[/cyan]\n"
+                f"每次保存都会自动生成新版本快照，可在浏览器中对比差异。",
+                border_style="green",
+            )
+        )
+        console.print(f"[dim]浏览器打开: http://127.0.0.1:{port}/[/dim]")
+        console.print("[dim]按 Ctrl+C 停止服务[/dim]")
+        console.print()
+
+        server = PreviewServer(
+            work_dir=file_path.parent,
+            port=port,
+            original_file=file_path,
+            open_browser=True,
+            mode="file",
+        )
+        server.start()
+        try:
+            server.wait()
+        except KeyboardInterrupt:
+            console.print("\n[dim]预览服务已停止[/dim]")
+        return
+
+    # ── 加载配置 (需要流水线处理) ──
     try:
         config = load_config(config_path, preset=preset_name or "")
     except Exception as e:
@@ -348,6 +413,29 @@ def main(
         console.print("[green]干运行完成，未实际调用模型[/green]")
         return
 
+    # ── 仅启动预览服务（流水线产物）──
+    if serve_only:
+        console.print(
+            "[green]启动预览服务，监听 .doc-ultra/ 目录...[/green]"
+        )
+        console.print(f"[dim]浏览器打开: http://127.0.0.1:{port}/[/dim]")
+        input_path = Path(input_file) if input_file else None
+        server = PreviewServer(
+            work_dir=Path(".doc-ultra"),
+            port=port,
+            original_file=input_path if input_path and input_path.exists() else None,
+            open_browser=True,
+            mode="pipeline",
+        )
+        server.start()
+        console.print("[green]预览服务已启动，按 Ctrl+C 停止[/green]")
+        console.print()
+        try:
+            server.wait()
+        except KeyboardInterrupt:
+            console.print("\n[dim]预览服务已停止[/dim]")
+        return
+
     # ── 执行流水线 ──
     skip_expand = no_expand or target_words <= 0
 
@@ -378,10 +466,33 @@ def main(
 
     console.print()
     console.print(
-        f"[green bold]✓ 完成！[/green bold] 输出文件: [cyan]{output_path}[/cyan]"
+        f"[green bold]\u2713 完成！[/green bold] 输出文件: [cyan]{output_path}[/cyan]"
     )
     console.print("[dim]中间产物保存在: .doc-ultra/[/dim]")
-
+    
+    # ── 启动预览（--serve）──
+    if serve:
+        console.print()
+        console.print(
+            "[green]启动预览服务，监听 .doc-ultra/ 目录...[/green]"
+        )
+        console.print(f"[dim]浏览器打开: http://127.0.0.1:{port}/[/dim]")
+        input_path = Path(input_file)
+        server = PreviewServer(
+            work_dir=Path(".doc-ultra"),
+            port=port,
+            original_file=input_path if input_path.exists() else None,
+            open_browser=True,
+            mode="pipeline",
+        )
+        server.start()
+        console.print("[green]预览服务已启动，按 Ctrl+C 停止[/green]")
+        console.print()
+        try:
+            server.wait()
+        except KeyboardInterrupt:
+            console.print("\n[dim]预览服务已停止[/dim]")
+    
     if verbose:
         log_path = Path(".doc-ultra") / "pipeline-execution.log"
         if log_path.exists():

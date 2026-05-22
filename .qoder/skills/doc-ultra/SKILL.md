@@ -3,9 +3,11 @@ name: doc-ultra
 description: >-
   Load when user needs to process, optimize, check, expand, or polish formal
   documents — especially bids, patents, software copyright registrations, group
-  standards, project applications, and knowledge base articles. Triggers:
+  standards, project applications, and knowledge base articles. Also for
+  real-time Markdown preview with version history and diff. Triggers:
   doc-ultra, 文档处理, 文档优化, 文档检查, 文档扩写, 润色文档, 标书,
-  专利, 软著, 团标, 申报书, 知识库文档. Do NOT load for code generation,
+  专利, 软著, 团标, 申报书, 知识库文档, 预览, 实时预览, 文档可视化,
+  看看这个文档, 对比这个文档. Do NOT load for code generation,
   code review, API design, configuration files, or database schema design.
 metadata:
   pattern: pipeline+reviewer+generator
@@ -67,13 +69,34 @@ metadata:
 
 ## Execution Logic
 
+### Quick Preview (No Pipeline)
+
+When user only wants to **preview** a .md file (no optimization/checking):
+
+```bash
+python -m doc_ultra.cli <file.md>
+```
+
+This starts a preview server with:
+- **Section cards** instead of plain headings — each `##` section is a foldable card
+- **Version history** — every save creates a new snapshot (V0, V1, V2...)
+- **Line-level diff** — click any two versions on the timeline to compare
+- **Three view modes** — overlay (revision-style with tooltips), side-by-side, or single
+- **Auto-refresh** — SSE push when file changes, browser updates instantly
+
+Browser opens at `http://127.0.0.1:8765`. No document processing happens.
+
+If the user says "预览这个文档" / "看看这个" / "可视化" without asking
+for optimization → use this command. Do NOT run the pipeline.
+
 ### First: Try CLI (one command)
 
 ```bash
-python -m doc_ultra.cli <input_file> -p <preset> -o <output_file>
+python -m doc_ultra.cli <input_file> -p <preset> -o <output_file> --serve
 ```
 
-If `python -m doc_ultra.cli` succeeds, the entire pipeline runs automatically.
+The `--serve` flag auto-opens preview after pipeline completes.
+If `python -m doc_ultra.cli` succeeds, the entire pipeline + preview runs automatically.
 Report results and stop. No manual stages needed.
 
 **If CLI fails** (ModuleNotFoundError), proceed to manual pipeline below.
@@ -220,6 +243,7 @@ After the pipeline finishes (either CLI or manual), MUST report to user:
 
 **Output**: `path/to/output.md`
 **Preset**: {preset_name} (or auto-detected)
+**Preview**: `http://127.0.0.1:{port}` (if --serve used)
 ```
 
 ---

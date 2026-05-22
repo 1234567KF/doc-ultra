@@ -11,6 +11,11 @@ dependencies = [
     "rich>=13.0",
 ]
 
+[project.optional-dependencies]
+preview = [
+    "watchdog>=4.0",
+]
+
 [project.scripts]
 doc-ultra = "doc_ultra.cli:main"
 
